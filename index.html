@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sopa (Gemini)</title>
+
+    <style>
+:root {
+    /* --- AJUSTE: Altura del margen arriba de la sopa --- */
+    --top-margin: 20px; 
+}
+
+html, body {
+    box-sizing: border-box;
+    height: 100vh; /* Ocupar el 100% de la ventana */
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Evitar scroll en toda la página */
+}
+
+*, *:before, *:after {
+    box-sizing: inherit;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #232327;
+    color: #FFF;
+    text-shadow: 2px 2px 0px #000, -1px -1px 0 #000;
+    /* Quitamos el display: flex de aquí para cederle el control al nuevo layout */
+}
+
+/* --- SECCIÓN SUPERIOR: SOPA DE LETRAS --- */
+#game-container {
+    padding: 0 10px 10px 10px;
+    background-color: #232327;
+    display: flex; 
+    justify-content: flex-start; 
+    align-items: flex-start; 
+    width: 100%; 
+    flex: 1; /* NUEVO: Obliga al contenedor a tomar toda la altura disponible */
+    box-sizing: border-box;
+    position: relative;
+}
+
+#word-search-grid {
+    display: grid;
+    /* Las columnas se definen en JS dinámicamente */
+    /* Las filas se definen en JS dinámicamente */
+    grid-auto-rows: 40px; 
+    gap: 2px;
+    position: relative;
+    /* La altura de esto define la altura del contenedor */
+}
+
+/* Panel lateral de palabras */
+#word-list-panel {
+    flex: 1; 
+    height: 100%; 
+    overflow-y: auto; 
+    overflow-x: auto; /* Permite el desplazamiento horizontal */
+    padding: 0 15px; 
+    display: flex;
+    flex-direction: column;
+    border-left: 2px solid #444; 
+}
+
+
+/* Personalización del Scrollbar (Opcional, estilo moderno) */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #333; 
+}
+::-webkit-scrollbar-thumb {
+    background: #951243; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #b91654; 
+}
+
+/* --- SECCIÓN INFERIOR: UI (CHAT Y BARRA) --- */
+#ui {
+    flex: 0 0 350px; /* Fuerza el ancho inicial a 350px */
+    width: 350px; 
+    min-width: 350px; /* Impide que se encoja */
+    max-width: 350px; /* Impide que se expanda */
+    display: flex;
+    flex-direction: column; 
+    border-left: 2px solid #444;
+    margin: 0; 
+}
+
+/* Contenedor del Chat */
+#chat-container {
+    width: 100%; 
+    height: 50%; 
+    display: flex;
+    flex-direction: column;
+    border-bottom: 2px solid #444; 
+    border-right: none; 
+}
+
+#chat {
+    flex: 1; 
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    padding: 10px;
+    font-size: 15px;
+    font-weight: bold;
+    border: none; 
+    word-break: break-word; 
+    /* Fuerzan al texto a usar múltiples renglones sin importar qué tan largo sea */
+    overflow-wrap: anywhere; 
+}
+
+#play-pause-bt {
+    height: 30px; /* Altura fija para el botón */
+    line-height: 30px;
+    text-align: center;
+    cursor: pointer;
+    background-color: rgb(83, 83, 0); /* Color inicial (PAUSE) */
+    font-weight: bold;
+    flex-shrink: 0; /* No encogerse */
+}
+
+/* Barra lateral de usuarios */
+#bar {
+    width: 100%; 
+    height: 50%; 
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    padding: 10px;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+/* --- ESTILOS AUXILIARES (Ya existentes, mantenidos) --- */
+
+.cell {
+    background-color: #232327;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 33px; /* Ajustado un poco para que quepa bien en 40px */
+    font-weight: bold;
+    text-transform: uppercase;
+    user-select: none;
+    position: relative; 
+    z-index: auto;
+}
+
+.cell span {
+    position: relative;
+    z-index: 20;
+    text-shadow: 2px 2px 0px #000, -1px -1px 0 #000;
+    pointer-events: none;
+}
+
+.header-cell {
+    background-color: transparent;
+    color: #fff341;
+    box-shadow: inset 0 0 0 1px #7d7d7d;
+    font-size: 33px; /* Ajustado para caber mejor */
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centrado */
+}
+
+.profile {
+    width: 20px;  /* Tamaño aproximado de un renglón de texto */
+    height: 20px;
+    vertical-align: middle; /* Para que no empuje el texto hacia arriba */
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+/* Estilos de fichas, popups, coronas, etc. (Sin cambios estructurales) */
+.player-token {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    z-index: 10;
+    pointer-events: auto;
+    transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    padding: 0; margin: 0; display: block;
+}
+.player-token img {
+    width: 100%; height: 100%; object-fit: cover; opacity: 1; border-radius: 4px; display: block;
+}
+
+.found { background-color: #232327; position: relative; }
+.found::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    box-shadow: inset 0 0 0 3px var(--player-color, #0F0);
+    z-index: 15;
+    pointer-events: none;
+}
+.found span { color: #fff; animation: pop 0.3s ease; z-index: 20; }
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+.word-item { 
+    font-size: 18px; /* Tamaño de letra reducido */
+    margin: 5px 0; 
+    color: #AAA; 
+    text-shadow: 2px 2px 0px #000, -1px -1px 0 #000; 
+    font-weight: bold; 
+    white-space: nowrap; /* Evita que la palabra pase al siguiente renglón */
+}
+.word-found { text-decoration: line-through; }
+
+/* Setup menu */
+#game-setup {
+    position: absolute; 
+    top: 50%; 
+    left: 50%; /* Cambiado a 50% para que se centre relativo a la mitad izquierda */
+    transform: translate(-50%, -50%); 
+    background-color: #232327; 
+    z-index: 100;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    color: white; 
+    padding: 20px; 
+    border: 2px solid #951243;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+#custom-words-input {
+    width: 300px;
+    height: 200px;
+    margin: 10px 0;
+    background-color: #333;
+    color: #FFF;
+    border: 1px solid #951243;
+    padding: 10px;
+}
+#game-setup button {
+    background-color: #951243; color: white; border: none; padding: 10px 20px; cursor: pointer; font-size: 16px; font-weight: bold;
+}
+.hidden { display: none !important; }
+
+/* Intro (oculto) */
+#intro { display: none; }
+
+/* Popups y Coronas */
+.score-popup {
+    position: absolute; background: none; border: none; color: #FFF; padding: 0; text-align: center; pointer-events: none; z-index: 100; white-space: nowrap; transform: translateX(-50%);
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 2px -1px 0 #000, -1px 2px 0 #000;
+    font-size: 16px; font-weight: bold; animation: floatUp 10s ease-out forwards;
+}
+.score-popup .big-number { display: block; font-size: 40px; color: #FFD700; line-height: 1; margin-top: 2px; }
+
+@keyframes floatUp {
+    0% { opacity: 1; transform: translate(-50%, -10px) scale(1); }
+    /* El pequeño "pop" ocurre rápido (2% de 10s = 0.2s) */
+    2% { transform: translate(-50%, -15px) scale(1.2); } 
+    /* El resto del tiempo flota lentamente hacia arriba y se desvanece */
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(1); }
+}
+
+.crown-icon {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-size: 20px; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; z-index: 25; pointer-events: none; animation: bounceCrown 1s infinite alternate;
+}
+@keyframes bounceCrown { from { transform: translateX(-50%) translateY(0); } to { transform: translateX(-50%) translateY(-5px); } }
+
+.rank-number { font-weight: bold; color: #FFD700; font-size: 18px; margin-right: 5px; min-width: 25px; display: inline-block; text-align: right; }
+.finder-icon { width: 24px; height: 24px; border-radius: 50%; vertical-align: middle; margin-left: 10px; border: 1px solid #FFF; object-fit: cover; }
+
+/* Estilos de botones de la UI (Barra lateral) */
+.restart-button, .byname-button, .byscore-button, .byviewer-button {
+    display: inline-block; color: #FFF; padding: 5px; margin: 2px; cursor: pointer; border-radius: 4px; font-size: 12px;
+}
+.restart-button { background-color: rgb(104, 104, 0); }
+
+.new-game-button {
+    display: inline-block; color: #FFF; background-color: #F00; /* Rojo */
+    padding: 5px; margin: 2px; cursor: pointer; border-radius: 4px; font-size: 12px;
+}
+
+.byname-button, .byscore-button, .byviewer-button { background-color: rgb(62, 62, 172); }
+.add-button, .sub-button {
+    color: #000; display: inline-block; width: 20px; text-align: center; cursor: pointer; margin: 0 2px;
+}
+.add-button { background-color: rgb(128, 201, 128); }
+.sub-button { background-color: rgb(151, 93, 93); }
+
+.comment-checkbox { display: inline; width: 20px; background-color: #666; cursor: pointer; border: none; color: white; margin-right: 5px;}
+.comment { display: inline; cursor: pointer; }
+.comment.highlighted { background-color: rgb(102, 102, 102); }
+.comment-checkbox.correct { background-color: green; }
+
+/* Diseño del Tooltip Personalizado */
+#custom-tooltip {
+    position: fixed;
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #FFF;
+    padding: 5px 10px;
+    border: 1px solid #FFD700; /* Borde dorado */
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    pointer-events: none; /* Importante para que el cuadro no interfiera con el ratón */
+    z-index: 10000;
+    display: none;
+    white-space: nowrap;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+}
+
+#main-layout {
+    display: flex;
+    flex-direction: row;
+    width: 100vw;
+    height: calc(100vh - var(--top-margin));
+    margin-top: var(--top-margin);
+    overflow: hidden;
+}
+
+#left-column {
+    display: flex;
+    flex-direction: column;
+    width: 50%; 
+    flex: 0 0 auto; 
+    position: relative; 
+}
+
+#left-column.playing {
+    width: min-content; 
+}
+
+#results-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(35, 35, 39, 0.95);
+    z-index: 90;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: flex-start;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.results-table, .colors-table {
+    border-collapse: collapse;
+    color: #FFF;
+    background-color: #232327;
+    font-size: 22px; /* Letra mucho más grande para el stream */
+}
+
+.results-table th, .results-table td,
+.colors-table th, .colors-table td {
+    border: 1px solid #555;
+    padding: 3px 12px; /* Relleno vertical reducido al mínimo indispensable */
+    text-align: left;
+    white-space: nowrap; /* Fuerza a que el texto nunca ocupe dos renglones */
+}
+
+.colors-table th, .results-table th { 
+    background-color: #951243; 
+    text-align: center;
+    font-size: 26px; /* Encabezados de tabla más grandes */
+}
+
+.color-box-small { 
+    width: 22px; /* Escala del cuadrito de color ampliada */
+    height: 22px; 
+    display: inline-block; 
+    vertical-align: middle; 
+    border: 1px solid #000; 
+    border-radius: 4px; 
+    margin-right: 8px;
+}
+
+#left-column.showing-results {
+    flex: 1; /* Obliga a la columna a tomar absolutamente todo el espacio sobrante */
+    width: auto;
+    overflow-x: auto; /* Crea un scroll independiente solo para la tabla si es muy ancha, protegiendo el chat */
+}
+
+
+    </style>
+
+    <script src="script.js"></script>
+	<script src="powerups.js"></script>
+</head>
+<body>
+	<div id="custom-tooltip"></div>
+	<span onclick="toggleIntroVis()" style="display: none">[...]</span>
+	<div id="intro">
+	
+    <h1>TikFinity WebSocket Example</h1>
+
+    <div>Please start the <a href="https://tikfinity.zerody.one/app/" target="_blank">TikFinity Desktop App</a> on this computer and connect to a livestream.</div>
+    <div>Join the <a href="https://discord.gg/uthtmVdpy8" target="_blank">Discord Community</a> if you need help.</div>
+
+    <br>
+
+    <div>Status: <span id="status">Disconnected</span></div>
+
+    <br>
+
+	</div>
+	<div id="main-layout">
+		
+		<div id="left-column">
+			<div id="game-container">
+				<div id="game-setup">
+					<h3>Configurar Sopa de Letras</h3>
+					<p>Escribe las palabras separadas por coma, espacio o enter:</p>
+					
+					<textarea id="custom-words-input" placeholder="EJEMPLO, JUEGO, STREAM..." oninput="updateWordCount()">UNO DOS TRES CUATRO CINCO SEIS SIETE OCHO NUEVE DIEZ ONCE DOCE TRECE CATORCE QUINCE VEINTE TREINTA CUARENTA CINCUENTA SESENTA SETENTA OCHENTA NOVENTA CIEN MIL</textarea>
+					<div id="word-count-display" style="font-size: 14px; font-weight: bold; color: #AAA; margin-top: -5px; margin-bottom: 10px; text-align: right; width: 100%; max-width: 370px;">Palabras: 0</div>
+					
+					<div style="margin: 10px 0; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+						<input type="checkbox" id="capture-chat-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+						<label for="capture-chat-checkbox" style="cursor: pointer;">Capturar palabras del chat automáticamente</label>
+					</div>
+
+					<div style="background-color: #333; padding: 10px; border: 1px solid #555; margin-bottom: 10px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+						
+						<div style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+							<input type="checkbox" id="keep-words-checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+							<label for="keep-words-checkbox" style="cursor: pointer;">Conservar palabras para la próxima sopa</label>
+						</div>
+
+						<hr style="border-color: #555; width: 100%; margin: 0;">
+
+						<div style="display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
+							<div style="display: flex; align-items: center; gap: 8px;">
+								<input type="checkbox" id="auto-start-words-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+								<label for="auto-start-words-checkbox" style="cursor: pointer; color: #FFD700;">Iniciar al llegar a Máx. Palabras</label>
+							</div>
+							<div>
+								<input type="number" id="max-words-input" value="25" style="width: 50px; padding: 3px;" min="1" onchange="checkWordLimitStart()">
+							</div>
+						</div>
+
+						<div style="display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
+							<div style="display: flex; align-items: center; gap: 8px;">
+								<input type="checkbox" id="auto-start-time-checkbox" onchange="toggleAutoStartTimer()" style="width: 18px; height: 18px; cursor: pointer;">
+								<label for="auto-start-time-checkbox" style="cursor: pointer; color: #FFD700;">Iniciar al agotar Segundos</label>
+							</div>
+							<div style="display: flex; align-items: center; gap: 5px;">
+								<span id="auto-start-countdown" style="color: #0F0; font-weight: bold; font-size: 14px; display: none;"></span>
+								<input type="number" id="max-seconds-input" value="120" onchange="toggleAutoStartTimer()" style="width: 50px; padding: 3px;" min="5">
+							</div>
+						</div>
+					</div>
+					<button onclick="startGameWithCustomWords()">¡Iniciar Juego!</button>
+				</div>
+
+				<div id="word-search-grid" class="hidden"></div>
+
+
+                <div id="results-overlay" class="hidden">
+                     <div id="results-board"></div>
+                    <div id="color-commands-list"></div>
+                </div>
+
+
+			</div>
+        </div>
+
+            
+
+        <div id="word-list-panel">
+            <div style="position: sticky; top: 0; background-color: #232327; z-index: 5; padding-top: 10px; padding-bottom: 10px;">
+                <h3 style="margin: 0 0 5px 0;">Palabras a encontrar:</h3>
+                
+                <!-- Contenedor ajustado para evitar saltos de línea -->
+                <div style="font-size: 13px; display: flex; align-items: center; gap: 5px; width: 100%; overflow: hidden;">
+                    <input type="checkbox" id="auto-scroll-cb" checked style="cursor: pointer; flex-shrink: 0;" onchange="scrollToFirstUnfound()">
+                    
+                    <label for="auto-scroll-cb" style="cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;" data-tooltip="Auto-desplazar a la primera pendiente">
+                        Auto-desplazar a la primera pendiente
+                    </label>
+                </div>
+            </div>
+            <div id="word-list-items"></div>
+        </div>
+
+        <div id="ui">
+            <div id="chat-container">
+                <div id="chat"></div>
+                <div id="play-pause-bt" onclick="pauseClick()">PAUSE</div>
+            </div>
+            <div id="bar">
+                <!-- --- NUEVO: Controles fijos de la barra --- -->
+                <div id="bar-controls">
+                    <div class="restart-button" onclick="restartScore()">Borrar puntos</div>
+                    <div class="new-game-button" onclick="showSetup()">Nueva sopa</div>
+                    | Ordenar:
+                    <div class="byname-button" onclick="sortByNameClick()">Por nombre</div>
+                    <div class="byscore-button" onclick="sortByScoreClick()">Por puntos</div>
+                    <div class="byviewer-button" onclick="sortByViewerClick()">Por espectador</div>
+                    
+                    <div style="margin-top: 10px; font-size: 13px; display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="auto-next-game-cb" style="cursor: pointer;">
+                        <label for="auto-next-game-cb" style="cursor: pointer;">Iniciar siguiente sopa en</label>
+                        <input type="number" id="auto-next-game-sec" value="10" style="width: 40px; padding: 2px;" min="1">
+                        <span>s.</span>
+                        <span id="next-game-countdown" style="color: #0F0; font-weight: bold; display: none;"></span>
+                    </div>
+
+                    <div style="margin-top: 10px; font-size: 13px; display: flex; align-items: center; gap: 5px;">
+                      <input type="checkbox" id="toggle-results-cb" style="cursor: pointer;" onchange="toggleResultsVis()">
+                       <label for="toggle-results-cb" style="cursor: pointer;">Ver resultados y comandos de color</label>
+                    </div>
+
+                    <hr style="border-color: #444; margin: 10px 0 5px 0;">
+                </div>
+                
+                <!-- --- NUEVO: Aquí se dibujará la lista de jugadores --- -->
+                <div id="bar-players"></div>
+            </div>
+        </div>
+    </div>
+
+
+		
+
+
+	
+	<audio id="explosion">
+		<source src="explosion.mp3" type="audio/mpeg">
+	</audio>
+	<audio id="missile">
+		<source src="missile.mp3" type="audio/mpeg">
+	</audio>
+	<audio id="drop">
+		<source src="drop.mp3" type="audio/mpeg">
+	</audio>
+
+    
+</body>
+</html>
